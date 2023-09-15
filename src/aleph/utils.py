@@ -1,14 +1,22 @@
 import asyncio
+import concurrent.futures
 from hashlib import sha256
-from typing import Union
+from typing import Union, TypeVar, Callable, Optional, TypeVarTuple
 
 from aleph_message.models import ItemType
 
 from aleph.exceptions import UnknownHashError
 from aleph.settings import settings
 
+T = TypeVar("T")
+Ts = TypeVarTuple("Ts")
 
-async def run_in_executor(executor, func, *args):
+
+async def run_in_executor(
+    executor: Optional[concurrent.futures.Executor],
+    func: Callable[[*Ts], T],
+    *args: *Ts,
+) -> T:
     if settings.use_executors:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(executor, func, *args)
