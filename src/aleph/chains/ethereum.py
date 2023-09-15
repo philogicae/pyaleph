@@ -9,6 +9,7 @@ from aleph_message.models import Chain
 from configmanager import Config
 from eth_account import Account
 from eth_account.messages import encode_defunct
+from eth_typing import BlockNumber
 from hexbytes import HexBytes
 from web3 import Web3
 from web3._utils.events import get_event_data
@@ -142,7 +143,7 @@ class EthereumConnector(Verifier, ChainWriter):
             if e.args[0]["code"] != -32005:
                 return
 
-            last_block = await asyncio.get_event_loop().run_in_executor(
+            last_block: BlockNumber = await run_in_executor(
                 None, web3.eth.get_block_number
             )
             if start_height < config.ethereum.start_height.value:
@@ -288,8 +289,8 @@ class EthereumConnector(Verifier, ChainWriter):
 
     @staticmethod
     def _broadcast_content(
-        config, contract, web3: Web3, account, gas_price, nonce, content
-    ):
+        config: Config, contract, web3: Web3, account, gas_price, nonce, content
+    ) -> HexBytes:
         tx = contract.functions.doEmit(content).build_transaction(
             {
                 "chainId": config.ethereum.chain_id.value,
@@ -310,10 +311,8 @@ class EthereumConnector(Verifier, ChainWriter):
 
         LOGGER.info("Ethereum Connector set up with address %s" % address)
         i = 0
-        gas_price = web3.eth.generate_gas_price()
         while True:
             with self.session_factory() as session:
-
                 # Wait for sync operations to complete
                 if (count_pending_txs(session=session, chain=Chain.ETH)) or (
                     count_pending_messages(session=session, chain=Chain.ETH)
@@ -321,10 +320,13 @@ class EthereumConnector(Verifier, ChainWriter):
                     await asyncio.sleep(30)
                     continue
                 gas_price = web3.eth.generate_gas_price()
+                # Cannot happen unless the gas strategy is not set
+                assert gas_price is not None
 
                 if i >= 100:
                     await asyncio.sleep(30)  # wait three (!!) blocks
                     gas_price = web3.eth.generate_gas_price()
+                    assert gas_price is not None
                     i = 0
 
                 if gas_price > config.ethereum.max_gas_price.value:
